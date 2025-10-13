@@ -29,18 +29,11 @@ def get_progress_bar(progress, width=20):
     return "█" * filled + "░" * empty
 
 
-def get_section_status_emojis(tasks):
-    """Создает строку эмодзи для статуса секции"""
-    emojis = []
-    for task in tasks:
-        progress = task.get('прогресс', 0)
-        emojis.append(get_progress_emoji(progress))
-
-    # Дополняем до 5 эмодзи для единообразия
-    while len(emojis) < 5:
-        emojis.append("⬜")
-
-    return " ".join(emojis[:5])
+def get_progress_bar_short(progress):
+    """Короткий прогресс-бар для компактного отображения"""
+    filled = "█" * (progress // 20)
+    empty = "░" * (5 - progress // 20)
+    return f"{filled}{empty} {progress}%"
 
 
 def calculate_section_progress(tasks):
@@ -64,13 +57,11 @@ def show_project_dashboard(project_data, project_name):
 
     for section_name, tasks in sections.items():
         section_progress = calculate_section_progress(tasks)
-        status_emojis = get_section_status_emojis(tasks)
 
         st.markdown(f"### {section_name}")
 
         # Прогресс-бар секции
-        progress_bar = get_progress_bar(section_progress)
-        st.markdown(f"`{progress_bar}` **{section_progress}%**")
+        st.markdown(f"`{get_progress_bar(section_progress)}` **{section_progress}%**")
 
         # Задачи секции
         for task in tasks:
@@ -78,14 +69,11 @@ def show_project_dashboard(project_data, project_name):
             task_progress = task.get('прогресс', 0)
             emoji = get_progress_emoji(task_progress)
 
-            # Создаем строку точек для выравнивания
-            dots = "." * (40 - len(task_name))
-
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns([3, 2])
             with col1:
-                st.write(f"{emoji} **{task_name}** {dots}")
+                st.write(f"{emoji} **{task_name}**")
             with col2:
-                st.write(f"**{task_progress}%**")
+                st.write(f"`{get_progress_bar_short(task_progress)}`")
 
         st.markdown("---")
 
@@ -114,6 +102,159 @@ def show_project_dashboard(project_data, project_name):
         # Веб-режим
         web_mode = overall.get('WEB_MODE', '')
         st.markdown(f"**🌐 WEB MODE:**           {web_mode}")
+
+
+def show_project_editor(project_data, project_name, project_file):
+    """Редактор проекта с графическим интерфейсом"""
+
+    st.subheader(f"✏️ Редактирование: {project_name}")
+
+    # Метаданные проекта
+    st.markdown("### 📋 Метаданные проекта")
+    metadata = project_data.get('metadata', {})
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        new_name = st.text_input("Название", value=metadata.get('название', project_name), key="meta_name")
+    with col2:
+        new_version = st.text_input("Версия", value=metadata.get('версия', 'v1.0.0'), key="meta_version")
+    with col3:
+        new_description = st.text_input("Описание", value=metadata.get('описание', ''), key="meta_description")
+
+    # Обновляем метаданные
+    project_data['metadata'] = {
+        'название': new_name,
+        'версия': new_version,
+        'дата': metadata.get('дата', '{{дата}}'),
+        'описание': new_description
+    }
+
+    # Секции и задачи
+    st.markdown("### 🎯 Задачи проекта")
+
+    sections = get_project_sections(project_data)
+
+    for section_name, tasks in sections.items():
+        # Заголовок секции с прогрессом
+        section_progress = calculate_section_progress(tasks)
+
+        st.markdown(f"#### 📁 {section_name}")
+        st.markdown(f"**Общий прогресс секции:** `{get_progress_bar(section_progress)}` **{section_progress}%**")
+
+        # Задачи в секции
+        for i, task in enumerate(tasks):
+            col1, col2, col3 = st.columns([3, 2, 1])
+
+            with col1:
+                new_task_name = st.text_input(
+                    "Название задачи",
+                    value=task['название'],
+                    key=f"task_{section_name}_{i}_name"
+                )
+                task['название'] = new_task_name
+
+            with col2:
+                new_progress = st.slider(
+                    "Прогресс",
+                    min_value=0,
+                    max_value=100,
+                    value=task.get('прогресс', 0),
+                    key=f"task_{section_name}_{i}_progress"
+                )
+                task['прогресс'] = new_progress
+
+            with col3:
+                st.markdown("")  # Отступ
+                st.markdown("")  # Отступ
+                if st.button("❌", key=f"delete_{section_name}_{i}"):
+                    # Удаляем задачу
+                    tasks.pop(i)
+                    save_json(project_file, project_data)
+                    st.rerun()
+
+        # Добавление новой задачи в секцию
+        col1, col2, col3 = st.columns([3, 1, 1])
+        with col1:
+            new_task_name = st.text_input(
+                "Новая задача",
+                key=f"new_task_{section_name}_name"
+            )
+        with col2:
+            new_task_progress = st.number_input(
+                "Прогресс %",
+                min_value=0,
+                max_value=100,
+                value=0,
+                key=f"new_task_{section_name}_progress"
+            )
+        with col3:
+            st.markdown("")  # Отступ
+            st.markdown("")  # Отступ
+            if st.button("➕", key=f"add_{section_name}") and new_task_name:
+                tasks.append({
+                    "название": new_task_name,
+                    "прогресс": new_task_progress
+                })
+                save_json(project_file, project_data)
+                st.rerun()
+
+        st.markdown("---")
+
+    # Общая статистика
+    st.markdown("### 📊 Общая статистика")
+    overall = project_data.get('overall', {})
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        global_progress = st.slider(
+            "Глобальный прогресс",
+            0, 100,
+            overall.get('GLOBAL_PROGRESS', 0),
+            key="global_progress"
+        )
+    with col2:
+        stability = st.slider(
+            "Индекс стабильности",
+            0, 100,
+            overall.get('STABILITY_INDEX', 0),
+            key="stability"
+        )
+    with col3:
+        performance = st.number_input(
+            "Прирост производительности %",
+            value=overall.get('PERFORMANCE_BOOST', 0),
+            key="performance"
+        )
+    with col4:
+        mobile_ready = st.checkbox(
+            "Мобильная готовность",
+            value=overall.get('MOBILE_READY', False),
+            key="mobile_ready"
+        )
+    with col5:
+        web_mode = st.selectbox(
+            "Веб-режим",
+            ["✅ Stable", "⚠️ IndexedDB unstable", "❌ Not supported"],
+            index=["✅ Stable", "⚠️ IndexedDB unstable", "❌ Not supported"].index(
+                overall.get('WEB_MODE', '⚠️ IndexedDB unstable')
+            ) if overall.get('WEB_MODE') in ["✅ Stable", "⚠️ IndexedDB unstable", "❌ Not supported"] else 1,
+            key="web_mode"
+        )
+
+    # Обновляем общую статистику
+    project_data['overall'] = {
+        'GLOBAL_PROGRESS': global_progress,
+        'STABILITY_INDEX': stability,
+        'PERFORMANCE_BOOST': performance,
+        'MOBILE_READY': mobile_ready,
+        'WEB_MODE': web_mode
+    }
+
+    # Кнопка сохранения
+    if st.button("💾 Сохранить все изменения", use_container_width=True):
+        save_json(project_file, project_data)
+        st.success("✅ Все изменения сохранены!")
 
 
 def show_projects_tab():
@@ -172,7 +313,14 @@ def show_projects_tab():
                                 {"название": "Проектирование архитектуры", "прогресс": 0}
                             ]
                         }
-                    ]
+                    ],
+                    "overall": {
+                        "GLOBAL_PROGRESS": 0,
+                        "STABILITY_INDEX": 0,
+                        "PERFORMANCE_BOOST": 0,
+                        "MOBILE_READY": False,
+                        "WEB_MODE": "❌ Not supported"
+                    }
                 }
                 new_project_file = PROJECTS_DIR / f"{new_project_name}.json"
                 save_json(new_project_file, empty_project)
@@ -210,50 +358,7 @@ def show_projects_tab():
         if view_mode == "📊 Дэшборд":
             show_project_dashboard(project_data, selected_project)
         else:
-            # Режим редактирования
-            st.subheader(f"✏️ Редактирование: {selected_project}")
-
-            # Отображение метаданных
-            metadata = project_data.get('metadata', {})
-            st.markdown("### 📋 Метаданные проекта")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.text_input("Название", value=metadata.get('название', ''), key="meta_name")
-            with col2:
-                st.text_input("Версия", value=metadata.get('версия', 'v1.0.0'), key="meta_version")
-            with col3:
-                st.text_input("Описание", value=metadata.get('описание', ''), key="meta_description")
-
-            # Отображение секций и задач
-            sections = get_project_sections(project_data)
-
-            for section_name, tasks in sections.items():
-                st.markdown(f"### 📁 {section_name}")
-
-                for i, task in enumerate(tasks):
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.text_input(
-                            "Название задачи",
-                            value=task['название'],
-                            key=f"task_{section_name}_{i}_name"
-                        )
-                    with col2:
-                        new_progress = st.number_input(
-                            "Прогресс %",
-                            min_value=0,
-                            max_value=100,
-                            value=task.get('прогресс', 0),
-                            key=f"task_{section_name}_{i}_progress"
-                        )
-
-                    # Обновляем прогресс в данных
-                    task['прогресс'] = new_progress
-
-            # Кнопка сохранения
-            if st.button("💾 Сохранить изменения", use_container_width=True):
-                save_json(project_file, project_data)
-                st.success("✅ Изменения сохранены!")
+            show_project_editor(project_data, selected_project, project_file)
 
     else:
         # Экран при отсутствии проектов
@@ -262,9 +367,11 @@ def show_projects_tab():
             ## 🚀 Добро пожаловать в менеджер проектов!
 
             Здесь вы можете:
-            - 📊 **Отслеживать прогресс** ваших проектов
+            - 📊 **Отслеживать прогресс** ваших проектов с графическими индикаторами
             - 🎯 **Создавать проекты** из шаблонов или с нуля
             - 📈 **Визуализировать** статус выполнения задач
+            - ✏️ **Редактировать** задачи с ползунками прогресса
+            - ❌ **Удалять** ненужные задачи
 
             **Чтобы начать, создайте ваш первый проект в боковой панели!**
             """)
