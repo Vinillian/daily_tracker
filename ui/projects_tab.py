@@ -17,15 +17,13 @@ class ProjectsTab:
         """Рендеринг боковой панели"""
         st.sidebar.header("📁 Управление проектами")
 
-        # Создание проекта
+        # Создание проекта (оставить как есть)
         st.sidebar.subheader("Создать новый проект")
-
         creation_type = st.sidebar.radio(
             "Тип проекта:",
             ["📝 Пустой проект", "🎯 Из шаблона"],
             key="project_creation_type"
         )
-
         new_project_name = st.sidebar.text_input("Название нового проекта")
 
         if creation_type == "🎯 Из шаблона":
@@ -34,7 +32,6 @@ class ProjectsTab:
                 self.template_names,
                 key="template_selection"
             )
-
             if st.sidebar.button("🚀 Создать из шаблона", use_container_width=True):
                 if new_project_name and selected_template:
                     try:
@@ -59,7 +56,7 @@ class ProjectsTab:
                 else:
                     st.sidebar.error("Введите название проекта")
 
-        # Выбор проекта
+            # ПРОСТОЙ ВЫБОР ПРОЕКТА
         st.sidebar.subheader("📊 Просмотр проектов")
         all_projects = project_service.list_projects()
 
@@ -67,16 +64,17 @@ class ProjectsTab:
             st.sidebar.info("📝 Проектов пока нет. Создайте первый проект!")
             return None
 
+        # Просто возвращаем выбранный проект из сайдбара
         selected_project = st.sidebar.selectbox(
             "Выберите проект",
             all_projects,
-            key="project_selection"
+            key="project_selection_sidebar"
         )
 
         return selected_project
 
     def render_project_content(self, project_name: str) -> None:
-        """Рендеринг содержимого проекта"""
+        """Рендеринг содержимого проекта - БЕЗ НАВИГАЦИИ В ОСНОВНОМ ОКНЕ"""
         try:
             project_data = project_service.load_project(project_name)
 
@@ -88,6 +86,9 @@ class ProjectsTab:
                 key=f"view_mode_{project_name}"
             )
 
+            # БОЛЬШЕ НЕТ НАВИГАЦИИ В ОСНОВНОМ ОКНЕ
+            # Используйте только сайдбар для переключения проектов
+
             if view_mode == "📊 Дэшборд":
                 self._render_project_dashboard(project_data, project_name)
             else:
@@ -95,6 +96,20 @@ class ProjectsTab:
 
         except DailyTrackerError as e:
             st.error(f"Ошибка загрузки проекта: {e}")
+
+    def _render_overall_stats(self, overall) -> None:
+        """Рендеринг общей статистики"""
+        st.markdown("### 🏁 OVERALL PROJECT STATUS")
+
+        st.markdown(
+            f"**📈 GLOBAL PROGRESS:**    `{ProgressComponents.progress_bar(overall.глобальный_прогресс)}` {overall.глобальный_прогресс}%")
+        st.markdown(
+            f"**🧠 STABILITY INDEX:**    `{ProgressComponents.progress_bar(overall.индекс_стабильности)}` {overall.индекс_стабильности}%")
+        st.markdown(f"**⚙️ PERFORMANCE BOOST:**  {'🟩' * 5} +{overall.прирост_производительности}%")
+
+        mobile_status = "✅ YES" if overall.мобильная_готовность else "❌ NO"
+        st.markdown(f"**📱 MOBILE READY:**       {mobile_status}")
+        st.markdown(f"**🌐 WEB MODE:**           {overall.веб_режим}")
 
     def _render_project_dashboard(self, project_data: Project, project_name: str) -> None:
         """Рендеринг дэшборда проекта"""
@@ -113,20 +128,6 @@ class ProjectsTab:
 
         # Общая статистика
         self._render_overall_stats(project_data.overall)
-
-    def _render_overall_stats(self, overall) -> None:
-        """Рендеринг общей статистики"""
-        st.markdown("### 🏁 OVERALL PROJECT STATUS")
-
-        st.markdown(
-            f"**📈 GLOBAL PROGRESS:**    `{ProgressComponents.progress_bar(overall.глобальный_прогресс)}` {overall.глобальный_прогресс}%")
-        st.markdown(
-            f"**🧠 STABILITY INDEX:**    `{ProgressComponents.progress_bar(overall.индекс_стабильности)}` {overall.индекс_стабильности}%")
-        st.markdown(f"**⚙️ PERFORMANCE BOOST:**  {'🟩' * 5} +{overall.прирост_производительности}%")
-
-        mobile_status = "✅ YES" if overall.мобильная_готовность else "❌ NO"
-        st.markdown(f"**📱 MOBILE READY:**       {mobile_status}")
-        st.markdown(f"**🌐 WEB MODE:**           {overall.веб_режим}")
 
     def _render_project_editor(self, project_data: Project, project_name: str) -> None:
         """Рендеринг редактора проекта"""
@@ -278,10 +279,21 @@ class ProjectsTab:
     def show_projects_tab(self) -> None:
         """Основной метод отображения вкладки"""
         try:
-            selected_project = self.render_sidebar()
+            # Получаем проект из сайдбара
+            sidebar_project = self.render_sidebar()
 
-            if selected_project:
-                self.render_project_content(selected_project)
+            # Используем session_state для хранения выбранного проекта
+            if 'selected_project' not in st.session_state:
+                st.session_state.selected_project = sidebar_project
+
+            # Если в сайдбаре выбрали другой проект - обновляем
+            if sidebar_project and sidebar_project != st.session_state.selected_project:
+                st.session_state.selected_project = sidebar_project
+
+            current_project = st.session_state.selected_project
+
+            if current_project:
+                self.render_project_content(current_project)
             else:
                 if not project_service.list_projects():
                     self.render_empty_state()
@@ -290,7 +302,6 @@ class ProjectsTab:
 
         except Exception as e:
             st.error(f"Неожиданная ошибка: {e}")
-
 
 # Глобальный экземпляр
 projects_tab = ProjectsTab()
