@@ -1,0 +1,10 @@
+C:/Users/user/PycharmProjects/daily_tracker/config
+C:/Users/user/PycharmProjects/daily_tracker/data
+C:/Users/user/PycharmProjects/daily_tracker/pages
+C:/Users/user/PycharmProjects/daily_tracker/templates
+C:/Users/user/PycharmProjects/daily_tracker/utils
+C:/Users/user/PycharmProjects/daily_tracker/.gitignore
+C:/Users/user/PycharmProjects/daily_tracker/app.py
+C:/Users/user/PycharmProjects/daily_tracker/data.json
+C:/Users/user/PycharmProjects/daily_tracker/README.md
+C:/Users/user/PycharmProjects/daily_tracker/requirements.txt
