@@ -11,6 +11,56 @@ TEMPLATE_DIR = Path("templates/daily_templates")
 ensure_dir(DIARY_DIR)
 
 
+def generate_time_slots():
+    """Генерирует список временных слотов с интервалом 15 минут"""
+    time_slots = []
+    for hour in range(0, 24):
+        for minute in [0, 15, 30, 45]:
+            time_str = f"{hour:02d}:{minute:02d}"
+            time_slots.append(time_str)
+    return time_slots
+
+
+def generate_time_ranges():
+    """Генерирует список временных диапазонов для выбора"""
+    time_ranges = []
+    slots = generate_time_slots()
+
+    for i in range(len(slots) - 1):
+        time_range = f"{slots[i]}–{slots[i + 1]}"
+        time_ranges.append(time_range)
+
+    # Добавляем популярные диапазоны
+    popular_ranges = [
+        "07:00–08:00", "08:00–09:00", "09:00–10:00", "10:00–11:00",
+        "11:00–12:00", "12:00–13:00", "13:00–14:00", "14:00–15:00",
+        "15:00–16:00", "16:00–17:00", "17:00–18:00", "18:00–19:00",
+        "19:00–20:00", "20:00–21:00", "21:00–22:00", "22:00–23:00"
+    ]
+
+    # Объединяем и убираем дубликаты
+    all_ranges = list(set(time_ranges + popular_ranges))
+    return sorted(all_ranges)
+
+
+def get_smart_time_suggestions(period):
+    """Предлагает умные временные интервалы в зависимости от периода дня"""
+    suggestions = {
+        "Утро": [
+            "06:00–07:00", "07:00–08:00", "08:00–09:00",
+            "09:00–10:00", "10:00–11:00", "11:00–12:00"
+        ],
+        "День": [
+            "12:00–13:00", "13:00–14:00", "14:00–15:00",
+            "15:00–16:00", "16:00–17:00", "17:00–18:00"
+        ],
+        "Вечер": [
+            "18:00–19:00", "19:00–20:00", "20:00–21:00",
+            "21:00–22:00", "22:00–23:00", "23:00–00:00"
+        ]
+    }
+    return suggestions.get(period, generate_time_ranges())
+
 def progress_bar(percent: int):
     """Создает текстовый прогресс-бар"""
     filled = "█" * (percent // 10)
@@ -260,14 +310,27 @@ def show_tasks_compact(period_name, tasks, selected_day, day_data, day_file):
                     placeholder="Название задачи..."
                 )
             with cols[1]:
-                task["время"] = st.text_input(
-                    "Время", task["время"],
+                # ВЫПАДАЮЩЕЕ МЕНЮ ДЛЯ ВРЕМЕНИ В СУЩЕСТВУЮЩИХ ЗАДАЧАХ
+                time_suggestions = get_smart_time_suggestions(period_name)
+                current_time = task.get("время", "09:00–10:00")
+
+                # Находим индекс текущего времени в списке предложений
+                if current_time in time_suggestions:
+                    default_index = time_suggestions.index(current_time)
+                else:
+                    default_index = 0
+                    # Добавляем текущее время в список, если его нет
+                    time_suggestions = [current_time] + time_suggestions
+
+                task["время"] = st.selectbox(
+                    "Время",
+                    time_suggestions,
+                    index=default_index,
                     key=f"{selected_day}_{period_name}_{i}_time",
-                    label_visibility="collapsed",
-                    placeholder="Время..."
+                    label_visibility="collapsed"
                 )
             with cols[2]:
-                # НОВОЕ: Выбор категории для существующей задачи
+                # Выбор категории для существующей задачи
                 current_category = task.get("категория", "🏠 Быт")
                 task["категория"] = st.selectbox(
                     "Категория",
@@ -298,16 +361,19 @@ def show_tasks_compact(period_name, tasks, selected_day, day_data, day_file):
 
         # Кнопка добавления новой задачи в этот период
         if st.button(f"➕ Добавить в {period_name}", key=f"add_{period_name}", use_container_width=True):
+            # УМНОЕ ВРЕМЯ ДЛЯ НОВОЙ ЗАДАЧИ
+            time_suggestions = get_smart_time_suggestions(period_name)
+            default_time = time_suggestions[0] if time_suggestions else "09:00–10:00"
+
             tasks.append({
                 "задача": "Новая задача",
-                "время": "",
+                "время": default_time,
                 "статус": "☐",
                 "прогресс": 0,
-                "категория": "🏠 Быт"  # ← категория по умолчанию
+                "категория": "🏠 Быт"
             })
             save_json(day_file, day_data)
             st.rerun()
-
 
 def show_day_management(selected_day, day_data, day_file):
     """Управление днем - сохранение, копирование и т.д."""
@@ -482,8 +548,14 @@ def show_diary_tab():
     if selected_day:
         period_select = st.sidebar.selectbox("Период", ["Утро", "День", "Вечер"], key="new_task_period")
         task_name = st.sidebar.text_input("Название задачи", key="new_task_name", placeholder="Описание задачи...")
-        task_time = st.sidebar.text_input("Время", key="new_task_time", placeholder="7:30-8:00")
 
+        # УМНОЕ ВРЕМЯ: предлагает подходящие интервалы для периода
+        time_suggestions = get_smart_time_suggestions(period_select)
+        task_time = st.sidebar.selectbox(
+            "Время",
+            time_suggestions,
+            key="new_task_time"
+        )
         # БЛОК ВЫБОРА КАТЕГОРИИ - НОВОЕ
         if task_name:
             st.sidebar.subheader("🎯 Категория задачи")
