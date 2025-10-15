@@ -1,14 +1,27 @@
-# app.py должен содержать:
 import streamlit as st
-from pages import diary_tab, projects_tab
+from ui.diary_tab import diary_tab
+from ui.projects_tab import projects_tab
 
-st.set_page_config(page_title="📅 Ежедневный трекер + 🚀 Проекты", layout="wide")
-st.title("📅 Ежедневный трекер + 🚀 Проекты")
 
-tab1, tab2 = st.tabs(["📅 Ежедневник", "🚀 Проекты"])
+def main():
+    """Главная функция приложения"""
+    st.set_page_config(
+        page_title="📅 Ежедневный трекер + 🚀 Проекты",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
 
-with tab1:
-    diary_tab.show_diary_tab()  # ← ВОТ ЭТОТ ВЫЗОВ
+    st.title("📅 Ежедневный трекер + 🚀 Проекты")
 
-with tab2:
-    projects_tab.show_projects_tab()
+    # Создаем вкладки
+    tab1, tab2 = st.tabs(["📅 Ежедневник", "🚀 Проекты"])
+
+    with tab1:
+        diary_tab.show_diary_tab()
+
+    with tab2:
+        projects_tab.show_projects_tab()
+
+
+if __name__ == "__main__":
+    main()
