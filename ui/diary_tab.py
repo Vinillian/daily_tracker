@@ -91,17 +91,10 @@ class DiaryTab:
 
             if st.sidebar.button("📅 Создать из шаблона", use_container_width=True) and new_day_name:
                 try:
-                    diary_service.create_day(new_day_name, selected_template)
-                    st.sidebar.success(f"День '{new_day_name}' создан из шаблона!")
-                    st.rerun()
-                except DailyTrackerError as e:
-                    st.sidebar.error(f"Ошибка: {e}")
-        else:
-            if st.sidebar.button("📄 Создать пустой день", use_container_width=True) and new_day_name:
-                try:
-                    diary_service.create_day(new_day_name)
-                    diary_service.save_day(new_day_name, Day())
-                    st.sidebar.success(f"Пустой день '{new_day_name}' создан!")
+                    # Создаем день из шаблона и сразу сохраняем
+                    day_data = diary_service.create_day(new_day_name, selected_template)
+                    diary_service.save_day(new_day_name, day_data)
+                    st.sidebar.success(f"День '{new_day_name}' создан из шаблона '{selected_template}'!")
                     st.rerun()
                 except DailyTrackerError as e:
                     st.sidebar.error(f"Ошибка: {e}")
@@ -151,6 +144,17 @@ class DiaryTab:
     def render_day_content(self, selected_day: str) -> None:
         """Рендеринг содержимого дня"""
         try:
+            # Проверяем существование дня перед загрузкой
+            if not diary_service.day_exists(selected_day):
+                st.warning(f"📅 День '{selected_day}' не найден")
+                st.info("""
+                **Чтобы создать этот день:**
+                1. В боковой панели введите дату: `{selected_day}`
+                2. Выберите тип дня (пустой или из шаблона)  
+                3. Нажмите кнопку создания дня
+                """.format(selected_day=selected_day))
+                return
+
             day_data = diary_service.load_day(selected_day)
             day_file = diary_service.data_dir / f"{selected_day}.json"
 

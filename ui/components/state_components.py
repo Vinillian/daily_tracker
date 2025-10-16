@@ -45,12 +45,12 @@ class StateComponents:
                 default_value = 50
 
             value = st.slider(
-                category.description,
+                f"Уровень {category.name.lower()}",
                 min_value=0,
                 max_value=100,
                 value=default_value,
                 key=f"state_{category.name}",
-                label_visibility="collapsed"  # ДОБАВИЛИ
+                help=category.description
             )
             display_value = f"{value}%"
             st.caption(f"🎯 {value}%")
@@ -75,11 +75,11 @@ class StateComponents:
                 default_value = 5
 
             value = st.select_slider(
-                category.description,
+                f"Оценка {category.name.lower()}",
                 options=list(range(1, 11)),
                 value=default_value,
                 key=f"state_{category.name}",
-                label_visibility="collapsed"  # ДОБАВИЛИ
+                help=category.description
             )
             # Визуальная шкала
             emoji_scale = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
@@ -89,11 +89,11 @@ class StateComponents:
         elif category.type == "text":
             # Текстовый ввод
             value = st.text_input(
-                category.description,
+                f"Описание {category.name.lower()}",
                 value=current_value,
                 key=f"state_{category.name}",
                 placeholder="Опишите состояние...",
-                label_visibility="collapsed"  # ДОБАВИЛИ
+                help=category.description
             )
             display_value = value
 
@@ -102,12 +102,12 @@ class StateComponents:
             options = ["✅ Да", "❌ Нет"]
             default_index = 0 if current_value == "✅ Да" else 1
             value = st.radio(
-                category.description,
+                f"{category.name}",
                 options,
                 index=default_index,
                 key=f"state_{category.name}",
                 horizontal=True,
-                label_visibility="collapsed"  # ДОБАВИЛИ
+                help=category.description
             )
             display_value = value
 

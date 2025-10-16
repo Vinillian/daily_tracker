@@ -47,7 +47,15 @@ class DiaryService:
             if template_name:
                 return self._create_from_template(day_date, template_name)
             else:
-                return Day()  # Просто пустой день
+                # Создаем действительно пустой день с правильной структурой
+                from models.state import DayState
+                return Day(
+                    morning=[],
+                    day=[],
+                    evening=[],
+                    state=DayState(),
+                    notes=[]
+                )
 
         except DataValidationError:
             raise
@@ -92,8 +100,35 @@ class DiaryService:
         if not template_file.exists():
             raise FileOperationError(f"Template {template_name} not found")
 
-        template_data = file_service.load_json(template_file)
-        return Day(**template_data)
+        try:
+            template_data = file_service.load_json(template_file)
+
+            # Заменяем плейсхолдеры в шаблоне
+            import uuid
+            import json
+
+            # Рекурсивно обходим данные и заменяем плейсхолдеры
+            def replace_placeholders(obj):
+                if isinstance(obj, dict):
+                    return {key: replace_placeholders(value) for key, value in obj.items()}
+                elif isinstance(obj, list):
+                    return [replace_placeholders(item) for item in obj]
+                elif isinstance(obj, str):
+                    # Заменяем {{дата}} на актуальную дату
+                    if "{{дата}}" in obj:
+                        obj = obj.replace("{{дата}}", day_date)
+                    # Заменяем {{uuid}} на реальные UUID
+                    if "{{uuid}}" in obj:
+                        obj = obj.replace("{{uuid}}", str(uuid.uuid4()))
+                    return obj
+                else:
+                    return obj
+
+            processed_data = replace_placeholders(template_data)
+            return Day(**processed_data)
+
+        except Exception as e:
+            raise FileOperationError(f"Error loading template {template_name}: {e}")
 
     def _suggest_category(self, task_text: str) -> str:
         """Suggest category by task text"""
