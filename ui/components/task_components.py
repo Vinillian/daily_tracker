@@ -20,9 +20,9 @@ class TaskComponents:
         col_index = 0
 
         with cols[col_index]:
-            task.задача = st.text_input(
+            task.task = st.text_input(
                 "Задача",
-                value=task.задача,
+                value=task.task,
                 key=f"{key_prefix}_task",
                 label_visibility="collapsed",
                 placeholder="Название задачи..."
@@ -30,9 +30,9 @@ class TaskComponents:
         col_index += 1
 
         with cols[col_index]:
-            task.время = st.text_input(
+            task.time = st.text_input(
                 "Время",
-                value=task.время,
+                value=task.time,
                 key=f"{key_prefix}_time",
                 label_visibility="collapsed",
                 placeholder="Время..."
@@ -41,9 +41,9 @@ class TaskComponents:
 
         if show_category:
             with cols[col_index]:
-                current_category = task.категория
+                current_category = task.category
                 category_index = CATEGORIES.index(current_category) if current_category in CATEGORIES else 0
-                task.категория = st.selectbox(
+                task.category = st.selectbox(
                     "Категория",
                     CATEGORIES,
                     index=category_index,
@@ -53,8 +53,8 @@ class TaskComponents:
             col_index += 1
 
         with cols[col_index]:
-            status_index = TASK_STATUSES.index(task.статус) if task.статус in TASK_STATUSES else 0
-            task.статус = st.selectbox(
+            status_index = TASK_STATUSES.index(task.status) if task.status in TASK_STATUSES else 0
+            task.status = st.selectbox(
                 "Статус",
                 TASK_STATUSES,
                 index=status_index,
@@ -64,11 +64,11 @@ class TaskComponents:
         col_index += 1
 
         with cols[col_index]:
-            task.прогресс = st.slider(
+            task.progress = st.slider(
                 "Прогресс",
                 min_value=0,
                 max_value=100,
-                value=task.прогресс,
+                value=task.progress,
                 key=f"{key_prefix}_progress",
                 label_visibility="collapsed"
             )
@@ -79,7 +79,6 @@ class TaskComponents:
                 on_delete()
 
         return task
-
     @staticmethod
     def render_task_compact(task: Task) -> None:
         """Компактное отображение задачи (только чтение)"""

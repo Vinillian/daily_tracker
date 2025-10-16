@@ -209,72 +209,70 @@ class DiaryTab:
 
     def _render_state_and_notes(self, day_data: Day, selected_day: str, day_file: str) -> None:
         """Рендеринг состояния и заметок"""
-        with st.expander("💫 Настроить состояние и заметки", expanded=False):
+
+        with st.expander("💫 Состояние и заметки", expanded=False):
+
+            # === БЛОК СОСТОЯНИЯ ===
             st.subheader("💫 Состояние")
 
-            col1, col2 = st.columns(2)
-            with col1:
-                body = st.text_input(
-                    "💪 Тело",
-                    value=day_data.состояние.тело,
-                    placeholder="Состояние тела..."
-                )
-                energy = st.text_input(
-                    "🧘 Энергия",
-                    value=day_data.состояние.энергия,
-                    placeholder="Уровень энергии..."
-                )
-                digestion = st.text_input(
-                    "💨 Пищеварение",
-                    value=day_data.состояние.пищеварение,
-                    placeholder="Пищеварение..."
-                )
+            # Проверяем что state существует
+            if not hasattr(day_data, 'state'):
+                from models.state import DayState
+                day_data.state = DayState()
 
-            with col2:
-                concentration = st.text_input(
-                    "🧠 Концентрация",
-                    value=day_data.состояние.концентрация,
-                    placeholder="Уровень концентрации..."
-                )
-                mood = st.text_input(
-                    "🌿 Настроение",
-                    value=day_data.состояние.настроение,
-                    placeholder="Настроение..."
-                )
-                weather_factor = st.text_input(
-                    "🌦️ Фактор",
-                    value=day_data.состояние.фактор_погоды,
-                    placeholder="Внешние факторы..."
-                )
+            # Загружаем категории состояния
+            try:
+                from services.state_service import state_service
+                state_categories = state_service.load_categories()
 
+                # Рендерим редактор состояния
+                from ui.components.state_components import StateComponents
+                StateComponents.render_state_editor(day_data.state, state_categories)
+
+                # Показываем сводку
+                StateComponents.render_state_summary(day_data.state, state_categories)
+
+            except Exception as e:
+                st.error(f"Ошибка загрузки категорий состояния: {e}")
+                st.info("⚠️ Используются категории по умолчанию")
+
+                # Fallback - простые поля
+                col1, col2 = st.columns(2)
+                with col1:
+                    energy = st.slider("💪 Энергия", 0, 100, 50)
+                    focus = st.slider("🧠 Фокус", 0, 100, 50)
+                with col2:
+                    mood = st.slider("😌 Настроение", 0, 100, 50)
+                    sleep = st.slider("🛌 Качество сна", 0, 100, 50)
+
+            # === БЛОК ЗАМЕТОК ===
             st.subheader("📝 Заметки")
+
+            # Проверяем что notes существует
+            if not hasattr(day_data, 'notes'):
+                day_data.notes = []
+
             notes_text = st.text_area(
                 "Заметки и инсайты дня (каждая с новой строки)",
-                value="\n".join(day_data.заметки) if day_data.заметки else "",
+                value="\n".join(day_data.notes) if day_data.notes else "",
                 height=120,
-                placeholder="Запишите ваши мысли, инсайты, наблюдения..."
+                placeholder="Запишите ваши мысли, инсайты, наблюдения...",
+                key=f"notes_{selected_day}"
             )
 
-            if st.button("💾 Сохранить состояние и заметки", use_container_width=True):
+            # Кнопка сохранения
+            if st.button("💾 Сохранить состояние и заметки", use_container_width=True, key=f"save_state_{selected_day}"):
                 try:
-                    # Обновляем состояние
-                    day_data.состояние.тело = body
-                    day_data.состояние.энергия = energy
-                    day_data.состояние.пищеварение = digestion
-                    day_data.состояние.концентрация = concentration
-                    day_data.состояние.настроение = mood
-                    day_data.состояние.фактор_погоды = weather_factor
-
                     # Обновляем заметки
                     if notes_text.strip():
-                        day_data.заметки = [note.strip() for note in notes_text.split('\n') if note.strip()]
+                        day_data.notes = [note.strip() for note in notes_text.split('\n') if note.strip()]
                     else:
-                        day_data.заметки = []
+                        day_data.notes = []
 
                     diary_service.save_day(selected_day, day_data)
                     st.success("✅ Состояние и заметки сохранены!")
                     st.rerun()
-                except DailyTrackerError as e:
+                except Exception as e:
                     st.error(f"Ошибка сохранения: {e}")
 
     def _render_day_management(self, selected_day: str, day_data: Day, day_file: str) -> None:
