@@ -107,10 +107,97 @@ class StateService:
         # Сортируем по порядку
         return sorted(categories, key=lambda x: x.order)
 
+    def add_category(self, category: StateCategory) -> None:
+        """Добавление новой категории"""
+        try:
+            categories = self.load_categories()
+
+            # Проверяем уникальность имени
+            if any(cat.name == category.name for cat in categories):
+                raise ValueError(f"Категория с именем '{category.name}' уже существует")
+
+            categories.append(category)
+            self.save_user_categories(categories)
+
+        except Exception as e:
+            raise FileOperationError(f"Ошибка добавления категории: {e}")
+
+    def update_category(self, category_name: str, updated_category: StateCategory) -> None:
+        """Обновление существующей категории"""
+        try:
+            categories = self.load_categories()
+
+            for i, cat in enumerate(categories):
+                if cat.name == category_name:
+                    categories[i] = updated_category
+                    self.save_user_categories(categories)
+                    return
+
+            raise ValueError(f"Категория '{category_name}' не найдена")
+
+        except Exception as e:
+            raise FileOperationError(f"Ошибка обновления категории: {e}")
+
+    def delete_category(self, category_name: str) -> None:
+        """Удаление категории"""
+        try:
+            categories = self.load_categories()
+
+            # Не позволяем удалять дефолтные категории
+            default_categories = self._load_default_categories()
+            default_names = {cat.name for cat in default_categories}
+
+            if category_name in default_names:
+                raise ValueError("Нельзя удалять категории по умолчанию")
+
+            # Удаляем категорию
+            categories = [cat for cat in categories if cat.name != category_name]
+            self.save_user_categories(categories)
+
+        except Exception as e:
+            raise FileOperationError(f"Ошибка удаления категории: {e}")
+
+    def reorder_categories(self, new_order: List[str]) -> None:
+        """Изменение порядка категорий"""
+        try:
+            categories = self.load_categories()
+            category_dict = {cat.name: cat for cat in categories}
+
+            # Создаем новый упорядоченный список
+            reordered_categories = []
+            for name in new_order:
+                if name in category_dict:
+                    reordered_categories.append(category_dict[name])
+
+            # Добавляем оставшиеся категории (если есть)
+            for cat in categories:
+                if cat.name not in new_order:
+                    reordered_categories.append(cat)
+
+            # Обновляем порядок
+            for i, cat in enumerate(reordered_categories):
+                cat.order = i + 1
+
+            self.save_user_categories(reordered_categories)
+
+        except Exception as e:
+            raise FileOperationError(f"Ошибка изменения порядка категорий: {e}")
+
+    def _load_default_categories(self) -> List[StateCategory]:
+        """Загрузка только дефолтных категорий"""
+        try:
+            with open(self.default_categories_file, 'r', encoding='utf-8') as f:
+                default_data = yaml.safe_load(f) or {}
+                default_categories = default_data.get('categories', [])
+                return [StateCategory(**cat) for cat in default_categories]
+        except Exception:
+            return []
+
     def save_user_categories(self, categories: List[StateCategory]) -> None:
         """Сохранение пользовательских категорий"""
         try:
-            data = {"categories": [cat.model_dump() for cat in categories]}  # ИСПРАВЛЕНО: model_dump вместо dict
+            # Используем dict() вместо model_dump для совместимости
+            data = {"categories": [cat.dict() for cat in categories]}
             with open(self.user_categories_file, 'w', encoding='utf-8') as f:
                 yaml.dump(data, f, allow_unicode=True, indent=2)
         except Exception as e:

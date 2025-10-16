@@ -213,7 +213,14 @@ class DiaryTab:
         with st.expander("💫 Состояние и заметки", expanded=False):
 
             # === БЛОК СОСТОЯНИЯ ===
-            st.subheader("💫 Состояние")
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                st.subheader("💫 Состояние")
+
+            with col2:
+                if st.button("⚙️ Управление категориями", use_container_width=True):
+                    st.session_state['managing_categories'] = not st.session_state.get('managing_categories', False)
 
             # Проверяем что state существует
             if not hasattr(day_data, 'state'):
@@ -225,12 +232,33 @@ class DiaryTab:
                 from services.state_service import state_service
                 state_categories = state_service.load_categories()
 
-                # Рендерим редактор состояния
-                from ui.components.state_components import StateComponents
-                StateComponents.render_state_editor(day_data.state, state_categories)
+                # Переключатель между управлением категориями и вводом состояния
+                if st.session_state.get('managing_categories', False):
+                    from ui.components.state_components import StateComponents
+                    StateComponents.render_category_management()
+                else:
+                    # Сохраняем текущее состояние перед рендерингом
+                    current_state_data = day_data.state.model_dump(by_alias=True) if hasattr(day_data.state,
+                                                                                             'model_dump') else day_data.state.dict(
+                        by_alias=True)
 
-                # Показываем сводку
-                StateComponents.render_state_summary(day_data.state, state_categories)
+                    # Рендерим редактор состояния
+                    from ui.components.state_components import StateComponents
+                    StateComponents.render_state_editor(day_data.state, state_categories)
+
+                    # Показываем сводку
+                    StateComponents.render_state_summary(day_data.state, state_categories)
+
+                    # Автосохранение при изменении состояния
+                    new_state_data = day_data.state.model_dump(by_alias=True) if hasattr(day_data.state,
+                                                                                         'model_dump') else day_data.state.dict(
+                        by_alias=True)
+                    if current_state_data != new_state_data:
+                        try:
+                            diary_service.save_day(selected_day, day_data)
+                            st.success("✅ Состояние сохранено!")
+                        except Exception as e:
+                            st.error(f"Ошибка сохранения состояния: {e}")
 
             except Exception as e:
                 st.error(f"Ошибка загрузки категорий состояния: {e}")
@@ -244,37 +272,6 @@ class DiaryTab:
                 with col2:
                     mood = st.slider("😌 Настроение", 0, 100, 50)
                     sleep = st.slider("🛌 Качество сна", 0, 100, 50)
-
-            # === БЛОК ЗАМЕТОК ===
-            st.subheader("📝 Заметки")
-
-            # Проверяем что notes существует
-            if not hasattr(day_data, 'notes'):
-                day_data.notes = []
-
-            notes_text = st.text_area(
-                "Заметки и инсайты дня (каждая с новой строки)",
-                value="\n".join(day_data.notes) if day_data.notes else "",
-                height=120,
-                placeholder="Запишите ваши мысли, инсайты, наблюдения...",
-                key=f"notes_{selected_day}"
-            )
-
-            # Кнопка сохранения
-            if st.button("💾 Сохранить состояние и заметки", use_container_width=True, key=f"save_state_{selected_day}"):
-                try:
-                    # Обновляем заметки
-                    if notes_text.strip():
-                        day_data.notes = [note.strip() for note in notes_text.split('\n') if note.strip()]
-                    else:
-                        day_data.notes = []
-
-                    diary_service.save_day(selected_day, day_data)
-                    st.success("✅ Состояние и заметки сохранены!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Ошибка сохранения: {e}")
-
     def _render_day_management(self, selected_day: str, day_data: Day, day_file: str) -> None:
         """Рендеринг управления днем"""
         st.markdown("---")

@@ -1,5 +1,5 @@
 import streamlit as st
-from typing import List, Dict
+from typing import List
 from models.state import StateCategory, DayState
 
 
@@ -31,8 +31,19 @@ class StateComponents:
         st.markdown(f"**{category.emoji} {category.name}**")
 
         if category.type == "percent":
-            # Проценты с ползунком
-            default_value = int(current_value) if current_value and current_value.replace('%', '').isdigit() else 50
+            # Проценты с ползунком - исправляем парсинг
+            try:
+                # Пытаемся извлечь число из строки "75%"
+                if current_value and '%' in current_value:
+                    clean_value = current_value.replace('%', '').strip()
+                    default_value = int(clean_value) if clean_value.isdigit() else 50
+                elif current_value and current_value.isdigit():
+                    default_value = int(current_value)
+                else:
+                    default_value = 50
+            except (ValueError, AttributeError):
+                default_value = 50
+
             value = st.slider(
                 category.description,
                 min_value=0,
@@ -44,9 +55,24 @@ class StateComponents:
             st.caption(f"🎯 {value}%")
 
         elif category.type == "scale_1_10":
-            # Шкала 1-10
-            default_value = int(current_value) if current_value and current_value.isdigit() and 1 <= int(
-                current_value) <= 10 else 5
+            # Шкала 1-10 - исправляем парсинг
+            try:
+                if current_value:
+                    # Извлекаем число из строки "5/10" или "7"
+                    if '/' in current_value:
+                        clean_value = current_value.split('/')[0].strip()
+                        # Убираем эмодзи если есть
+                        clean_value = ''.join(c for c in clean_value if c.isdigit())
+                        default_value = int(clean_value) if clean_value and 1 <= int(clean_value) <= 10 else 5
+                    elif current_value.isdigit():
+                        default_value = int(current_value)
+                    else:
+                        default_value = 5
+                else:
+                    default_value = 5
+            except (ValueError, AttributeError):
+                default_value = 5
+
             value = st.select_slider(
                 category.description,
                 options=list(range(1, 11)),
@@ -104,3 +130,182 @@ class StateComponents:
             st.markdown(summary_text)
         else:
             st.info("ℹ️ Заполните состояние выше")
+
+    @staticmethod
+    def render_category_management() -> None:
+        """UI для управления категориями состояния"""
+        from services.state_service import state_service  # Импорт внутри метода
+
+        st.subheader("⚙️ Управление категориями состояния")
+
+        # Загружаем текущие категории
+        categories = state_service.load_categories()
+
+        # Переключатель режимов
+        management_mode = st.radio(
+            "Режим управления:",
+            ["📋 Просмотр и редактирование", "➕ Добавить новую категорию"],
+            horizontal=True,
+            key="category_management_mode"
+        )
+
+        if management_mode == "📋 Просмотр и редактирование":
+            StateComponents._render_category_list(categories, state_service)
+        else:
+            StateComponents._render_add_category_form(state_service)
+
+    @staticmethod
+    def _render_category_list(categories: List[StateCategory], state_service) -> None:
+        """Рендеринг списка категорий для редактирования"""
+
+        if not categories:
+            st.info("📝 Категории не настроены. Добавьте первую категорию!")
+            return
+
+        st.markdown("#### Существующие категории:")
+
+        for i, category in enumerate(categories):
+            with st.container():
+                col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 2])
+
+                with col1:
+                    st.markdown(f"**{i + 1}.**")
+
+                with col2:
+                    st.markdown(f"{category.emoji} **{category.name}**")
+                    if category.description:
+                        st.caption(category.description)
+
+                with col3:
+                    type_display = {
+                        "percent": "📊 Проценты",
+                        "scale_1_10": "🔢 Шкала 1-10",
+                        "text": "📝 Текст",
+                        "yes_no": "✅ Да/Нет"
+                    }
+                    st.write(type_display.get(category.type, category.type))
+
+                with col4:
+                    # Кнопка редактирования
+                    if st.button("✏️ Редактировать", key=f"edit_{category.name}", use_container_width=True):
+                        st.session_state[f'editing_{category.name}'] = True
+
+                with col5:
+                    # Кнопка удаления (только для пользовательских категорий)
+                    is_default = hasattr(category, 'is_default') and category.is_default
+                    if not is_default and st.button("🗑️ Удалить", key=f"delete_{category.name}",
+                                                    use_container_width=True):
+                        try:
+                            state_service.delete_category(category.name)
+                            st.success(f"Категория '{category.name}' удалена!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Ошибка удаления: {e}")
+
+                # Форма редактирования
+                if st.session_state.get(f'editing_{category.name}', False):
+                    StateComponents._render_edit_category_form(category, state_service)
+
+    @staticmethod
+    def _render_edit_category_form(category: StateCategory, state_service) -> None:
+        """Форма редактирования категории"""
+
+        st.markdown("---")
+        st.markdown(f"##### ✏️ Редактирование: {category.name}")
+
+        with st.form(key=f"edit_form_{category.name}"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                new_name = st.text_input("Название", value=category.name)
+                new_emoji = st.text_input("Эмодзи", value=category.emoji)
+                new_color = st.color_picker("Цвет", value=category.color)
+
+            with col2:
+                new_type = st.selectbox(
+                    "Тип ввода",
+                    state_service.get_category_types(),
+                    index=state_service.get_category_types().index(category.type)
+                )
+                new_description = st.text_area(
+                    "Описание",
+                    value=category.description,
+                    placeholder="Описание категории..."
+                )
+                new_order = st.number_input(
+                    "Порядок отображения",
+                    min_value=1,
+                    value=category.order
+                )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.form_submit_button("💾 Сохранить изменения", use_container_width=True):
+                    try:
+                        updated_category = StateCategory(
+                            name=new_name,
+                            type=new_type,
+                            emoji=new_emoji,
+                            color=new_color,
+                            description=new_description,
+                            order=new_order
+                        )
+                        state_service.update_category(category.name, updated_category)
+                        st.session_state[f'editing_{category.name}'] = False
+                        st.success("✅ Категория обновлена!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Ошибка обновления: {e}")
+
+            with col2:
+                if st.form_submit_button("❌ Отмена", use_container_width=True):
+                    st.session_state[f'editing_{category.name}'] = False
+                    st.rerun()
+
+    @staticmethod
+    def _render_add_category_form(state_service) -> None:
+        """Форма добавления новой категории"""
+
+        st.markdown("#### Добавить новую категорию")
+
+        with st.form(key="add_category_form"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                new_name = st.text_input("Название категории *", placeholder="Например: Энергия")
+                new_emoji = st.text_input("Эмодзи *", value="⚪", placeholder="⚡")
+                new_color = st.color_picker("Цвет *", value="#808080")
+
+            with col2:
+                new_type = st.selectbox(
+                    "Тип ввода *",
+                    state_service.get_category_types()
+                )
+                new_description = st.text_area(
+                    "Описание",
+                    placeholder="Краткое описание категории..."
+                )
+                new_order = st.number_input(
+                    "Порядок отображения",
+                    min_value=1,
+                    value=99
+                )
+
+            if st.form_submit_button("➕ Добавить категорию", use_container_width=True):
+                if not new_name or not new_emoji:
+                    st.error("❌ Заполните обязательные поля (отмечены *)")
+                else:
+                    try:
+                        new_category = StateCategory(
+                            name=new_name.strip(),
+                            type=new_type,
+                            emoji=new_emoji.strip(),
+                            color=new_color,
+                            description=new_description.strip(),
+                            order=new_order
+                        )
+                        state_service.add_category(new_category)
+                        st.success(f"✅ Категория '{new_name}' добавлена!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Ошибка добавления: {e}")
