@@ -263,6 +263,31 @@ class StateComponents:
                     st.rerun()
 
     @staticmethod
+    def render_category_management() -> None:
+        """UI для управления категориями состояния"""
+        from services.state_service import state_service
+
+        st.subheader("⚙️ Управление категориями состояния")
+
+        # Загружаем текущие категории
+        categories = state_service.load_categories()
+
+        # Переключатель режимов
+        management_mode = st.radio(
+            "Режим управления:",
+            ["📋 Просмотр и редактирование", "➕ Добавить новую категорию", "📥 Быстрое добавление"],
+            horizontal=True,
+            key="category_management_mode"
+        )
+
+        if management_mode == "📋 Просмотр и редактирование":
+            StateComponents._render_category_list(categories, state_service)
+        elif management_mode == "➕ Добавить новую категорию":
+            StateComponents._render_add_category_form(state_service)
+        else:
+            StateComponents._render_quick_add_categories(state_service)
+
+    @staticmethod
     def _render_add_category_form(state_service) -> None:
         """Форма добавления новой категории"""
 
@@ -306,6 +331,51 @@ class StateComponents:
                         )
                         state_service.add_category(new_category)
                         st.success(f"✅ Категория '{new_name}' добавлена!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Ошибка добавления: {e}")
+
+    @staticmethod
+    def _render_quick_add_categories(state_service) -> None:
+        """Быстрое добавление категорий из предустановленного списка"""
+
+        st.markdown("#### 📥 Быстрое добавление категорий")
+        st.info("Выберите категории из предустановленного списка для быстрого добавления")
+
+        # Загружаем дополнительные категории
+        additional_categories = state_service.load_additional_categories()
+        current_categories = state_service.load_categories()
+
+        # Исключаем уже добавленные категории
+        current_category_names = {cat.name for cat in current_categories}
+        available_categories = [cat for cat in additional_categories if cat.name not in current_category_names]
+
+        if not available_categories:
+            st.success("🎉 Все доступные категории уже добавлены!")
+            return
+
+        # Показываем категории для быстрого добавления
+        for category in available_categories:
+            col1, col2, col3 = st.columns([3, 2, 1])
+
+            with col1:
+                st.markdown(f"**{category.emoji} {category.name}**")
+                st.caption(category.description)
+
+            with col2:
+                type_display = {
+                    "percent": "📊 Проценты",
+                    "scale_1_10": "🔢 Шкала 1-10",
+                    "text": "📝 Текст",
+                    "yes_no": "✅ Да/Нет"
+                }
+                st.write(type_display.get(category.type, category.type))
+
+            with col3:
+                if st.button("➕ Добавить", key=f"quick_add_{category.name}", use_container_width=True):
+                    try:
+                        state_service.add_category(category)
+                        st.success(f"✅ Категория '{category.name}' добавлена!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Ошибка добавления: {e}")
