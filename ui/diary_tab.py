@@ -131,10 +131,10 @@ class DiaryTab:
         )
 
         if st.sidebar.button("Добавить задачу", use_container_width=True,
-                             key="add_task_quick_sidebar") and task_name and selected_day:  # ИЗМЕНИЛИ
+                             key="add_task_quick_sidebar") and task_name and selected_day:
             try:
                 day_data = diary_service.load_day(selected_day)
-                new_task = Task(
+                new_task = Task(  # ⬅️ Автоматически получит ID
                     задача=task_name,
                     время=task_time or self._suggest_next_time([], period_select),
                     статус="☐",
@@ -173,10 +173,9 @@ class DiaryTab:
             st.error(f"Ошибка загрузки дня: {e}")
 
     def _render_period_tasks(self, period: str, day_data: Day, selected_day: str, day_file: str) -> None:
-        """Рендеринг задач периода с сортировкой и перемещением"""
+        """Рендеринг задач периода с использованием ID вместо индексов"""
         tasks = day_data.get_tasks_by_period(period)
 
-        # Защита от None
         if tasks is None:
             tasks = []
 
@@ -184,58 +183,64 @@ class DiaryTab:
 
         with st.expander(f"{icon} {period} ({len(tasks)} задач)", expanded=True):
 
-            # Сортировка задач по времени
+            # Сортируем задачи для отображения
             sorted_tasks = self._sort_tasks_by_time(tasks)
 
-            for i, task in enumerate(sorted_tasks):
-                # Защита от None задачи
+            for display_index, task in enumerate(sorted_tasks):
                 if task is None:
                     continue
 
-                def create_delete_callback(task_idx, period_tasks):
+                # ✅ СОЗДАЕМ CALLBACK'И С ФИКСИРОВАННЫМИ ID
+                # Используем замыкание с параметром по умолчанию
+                def create_delete_callback(task_id=task.id):
                     def delete_task():
-                        if 0 <= task_idx < len(period_tasks):
-                            period_tasks.pop(task_idx)
-                            diary_service.save_day(selected_day, day_data)
-                            st.rerun()
+                        # Удаляем задачу по ID
+                        tasks[:] = [t for t in tasks if getattr(t, 'id', None) != task_id]
+                        diary_service.save_day(selected_day, day_data)
+                        st.rerun()
 
                     return delete_task
 
-                def create_move_up_callback(task_idx, period_tasks):
+                def create_move_up_callback(task_id=task.id):
                     def move_up():
-                        if task_idx > 0 and task_idx < len(period_tasks):
-                            period_tasks[task_idx], period_tasks[task_idx - 1] = period_tasks[task_idx - 1], \
-                            period_tasks[task_idx]
-                            diary_service.save_day(selected_day, day_data)
+                        # Находим индекс задачи по ID
+                        for i, t in enumerate(tasks):
+                            if getattr(t, 'id', None) == task_id:
+                                if i > 0:
+                                    # Меняем местами с предыдущей задачей
+                                    tasks[i], tasks[i - 1] = tasks[i - 1], tasks[i]
+                                    diary_service.save_day(selected_day, day_data)
+                                    st.rerun()
+                                break
 
                     return move_up
 
-                def create_move_down_callback(task_idx, period_tasks):
+                def create_move_down_callback(task_id=task.id):
                     def move_down():
-                        if task_idx < len(period_tasks) - 1:
-                            period_tasks[task_idx], period_tasks[task_idx + 1] = period_tasks[task_idx + 1], \
-                            period_tasks[task_idx]
-                            diary_service.save_day(selected_day, day_data)
+                        # Находим индекс задачи по ID
+                        for i, t in enumerate(tasks):
+                            if getattr(t, 'id', None) == task_id:
+                                if i < len(tasks) - 1:
+                                    # Меняем местами со следующей задачей
+                                    tasks[i], tasks[i + 1] = tasks[i + 1], tasks[i]
+                                    diary_service.save_day(selected_day, day_data)
+                                    st.rerun()
+                                break
 
                     return move_down
 
-                # Находим оригинальный индекс задачи после сортировки
-                try:
-                    original_index = tasks.index(task) if task in tasks else i
-                except ValueError:
-                    original_index = i
-
+                # ✅ ИСПОЛЬЗУЕМ ID В КЛЮЧАХ ДЛЯ УНИКАЛЬНОСТИ
                 TaskComponents.render_task_editor(
                     task=task,
-                    key_prefix=f"{selected_day}_{period}_{i}",
-                    on_delete=create_delete_callback(original_index, tasks),
-                    on_move_up=create_move_up_callback(original_index, tasks),
-                    on_move_down=create_move_down_callback(original_index, tasks),
+                    key_prefix=f"{selected_day}_{period}_{task.id}",  # ⬅️ Уникальный ключ с ID
+                    on_delete=create_delete_callback(),
+                    on_move_up=create_move_up_callback(),
+                    on_move_down=create_move_down_callback(),
                     show_category=True,
                     show_move_buttons=True
                 )
 
-            # Кнопка добавления новой задачи
+            # Кнопка добавления новой задачи (автоматически получит ID)
             col1, col2 = st.columns([3, 1])
             with col1:
                 if st.button(f"➕ Добавить задачу в {period}", key=f"add_{period}", use_container_width=True):

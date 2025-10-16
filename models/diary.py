@@ -1,11 +1,13 @@
 from typing import List, Dict
+from models.state import DayState
+import uuid
 from pydantic import Field, validator
 from .base import SerializableModel
-from models.state import DayState
 
 
 class Task(SerializableModel):
     """Task model"""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="Unique task ID")  # ⬅️ ДОБАВИТЬ
     task: str = Field(..., description="Название задачи", alias="задача")
     time: str = Field(..., description="Временной интервал", alias="время")
     status: str = Field("☐", description="Статус выполнения", alias="статус")
