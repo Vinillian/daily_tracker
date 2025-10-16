@@ -12,66 +12,40 @@ class TaskComponents:
             task: Task,
             key_prefix: str,
             on_delete: Optional[Callable] = None,
-            show_category: bool = True
+            on_move_up: Optional[Callable] = None,
+            on_move_down: Optional[Callable] = None,
+            show_category: bool = True,
+            show_move_buttons: bool = True
     ) -> Task:
         """Рендеринг редактора одной задачи"""
-        cols = st.columns([3, 2, 2, 2, 2, 1] if show_category else [3, 2, 2, 2, 1])
 
+        cols = st.columns([3, 2, 2, 2, 2, 1] if show_category else [3, 2, 2, 2, 1])
         col_index = 0
 
         with cols[col_index]:
-            task.task = st.text_input(
-                "Задача",
-                value=task.task,
-                key=f"{key_prefix}_task",
-                label_visibility="collapsed",
-                placeholder="Название задачи..."
-            )
+            task.task = st.text_input("Задача", value=task.task, key=f"{key_prefix}_task")
         col_index += 1
 
         with cols[col_index]:
-            task.time = st.text_input(
-                "Время",
-                value=task.time,
-                key=f"{key_prefix}_time",
-                label_visibility="collapsed",
-                placeholder="Время..."
-            )
+            task.time = st.text_input("Время", value=task.time, key=f"{key_prefix}_time")
         col_index += 1
 
         if show_category:
             with cols[col_index]:
-                current_category = task.category
-                category_index = CATEGORIES.index(current_category) if current_category in CATEGORIES else 0
-                task.category = st.selectbox(
-                    "Категория",
-                    CATEGORIES,
-                    index=category_index,
-                    key=f"{key_prefix}_category",
-                    label_visibility="collapsed"
-                )
+                task.category = st.selectbox("Категория", CATEGORIES,
+                                             index=CATEGORIES.index(
+                                                 task.category) if task.category in CATEGORIES else 0,
+                                             key=f"{key_prefix}_category")
             col_index += 1
 
         with cols[col_index]:
-            status_index = TASK_STATUSES.index(task.status) if task.status in TASK_STATUSES else 0
-            task.status = st.selectbox(
-                "Статус",
-                TASK_STATUSES,
-                index=status_index,
-                key=f"{key_prefix}_status",
-                label_visibility="collapsed"
-            )
+            task.status = st.selectbox("Статус", TASK_STATUSES,
+                                       index=TASK_STATUSES.index(task.status) if task.status in TASK_STATUSES else 0,
+                                       key=f"{key_prefix}_status")
         col_index += 1
 
         with cols[col_index]:
-            task.progress = st.slider(
-                "Прогресс",
-                min_value=0,
-                max_value=100,
-                value=task.progress,
-                key=f"{key_prefix}_progress",
-                label_visibility="collapsed"
-            )
+            task.progress = st.slider("Прогресс", 0, 100, task.progress, key=f"{key_prefix}_progress")
         col_index += 1
 
         with cols[col_index]:
@@ -79,6 +53,7 @@ class TaskComponents:
                 on_delete()
 
         return task
+
     @staticmethod
     def render_task_compact(task: Task) -> None:
         """Компактное отображение задачи (только чтение)"""

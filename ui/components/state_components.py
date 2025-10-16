@@ -49,7 +49,8 @@ class StateComponents:
                 min_value=0,
                 max_value=100,
                 value=default_value,
-                key=f"state_{category.name}"
+                key=f"state_{category.name}",
+                label_visibility="collapsed"  # ДОБАВИЛИ
             )
             display_value = f"{value}%"
             st.caption(f"🎯 {value}%")
@@ -77,7 +78,8 @@ class StateComponents:
                 category.description,
                 options=list(range(1, 11)),
                 value=default_value,
-                key=f"state_{category.name}"
+                key=f"state_{category.name}",
+                label_visibility="collapsed"  # ДОБАВИЛИ
             )
             # Визуальная шкала
             emoji_scale = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
@@ -90,7 +92,8 @@ class StateComponents:
                 category.description,
                 value=current_value,
                 key=f"state_{category.name}",
-                placeholder="Опишите состояние..."
+                placeholder="Опишите состояние...",
+                label_visibility="collapsed"  # ДОБАВИЛИ
             )
             display_value = value
 
@@ -103,7 +106,8 @@ class StateComponents:
                 options,
                 index=default_index,
                 key=f"state_{category.name}",
-                horizontal=True
+                horizontal=True,
+                label_visibility="collapsed"  # ДОБАВИЛИ
             )
             display_value = value
 
@@ -134,7 +138,7 @@ class StateComponents:
     @staticmethod
     def render_category_management() -> None:
         """UI для управления категориями состояния"""
-        from services.state_service import state_service  # Импорт внутри метода
+        from services.state_service import state_service
 
         st.subheader("⚙️ Управление категориями состояния")
 
@@ -144,15 +148,17 @@ class StateComponents:
         # Переключатель режимов
         management_mode = st.radio(
             "Режим управления:",
-            ["📋 Просмотр и редактирование", "➕ Добавить новую категорию"],
+            ["📋 Просмотр и редактирование", "➕ Добавить новую категорию", "📥 Быстрое добавление"],
             horizontal=True,
-            key="category_management_mode"
+            key="category_management_mode_main"  # ИЗМЕНИЛИ
         )
 
         if management_mode == "📋 Просмотр и редактирование":
             StateComponents._render_category_list(categories, state_service)
-        else:
+        elif management_mode == "➕ Добавить новую категорию":
             StateComponents._render_add_category_form(state_service)
+        else:
+            StateComponents._render_quick_add_categories(state_service)
 
     @staticmethod
     def _render_category_list(categories: List[StateCategory], state_service) -> None:
@@ -293,7 +299,7 @@ class StateComponents:
 
         st.markdown("#### Добавить новую категорию")
 
-        with st.form(key="add_category_form"):
+        with st.form(key="add_category_form_main"):  # ИЗМЕНИЛИ
             col1, col2 = st.columns(2)
 
             with col1:

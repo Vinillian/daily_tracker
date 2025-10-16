@@ -7,8 +7,8 @@ from services.diary_service import diary_service
 from models.diary import Day, Task
 from ui.components.task_components import TaskComponents
 from ui.components.progress_components import ProgressComponents
-
-
+from ui.components.time_components import TimeComponents
+from core.constants import CATEGORIES, TASK_STATUSES
 class DiaryTab:
     """Вкладка ежедневника"""
 
@@ -107,34 +107,39 @@ class DiaryTab:
                     st.sidebar.error(f"Ошибка: {e}")
 
     def _render_quick_task_add(self, selected_day: str) -> None:
-        """Быстрое добавление задачи"""
+        """Быстрое добавление задачи с улучшенным выбором времени"""
         st.sidebar.subheader("➕ Быстрое добавление задачи")
 
         period_select = st.sidebar.selectbox(
             "Период",
             DAY_PERIODS,
-            key="new_task_period"
+            key="new_task_period_quick_add"  # ИЗМЕНИЛИ
         )
         task_name = st.sidebar.text_input(
             "Название задачи",
-            key="new_task_name",
+            key="new_task_name_quick_add",  # ИЗМЕНИЛИ
             placeholder="Описание задачи..."
         )
-        task_time = st.sidebar.text_input(
-            "Время",
-            key="new_task_time",
-            placeholder="09:00–10:00"
+
+        # Используем улучшенный селектор времени с уникальным ключом
+        task_time = TimeComponents.render_time_selector(key_suffix="quick_add_sidebar")  # ИЗМЕНИЛИ
+
+        category_select = st.sidebar.selectbox(
+            "Категория",
+            CATEGORIES,
+            key="new_task_category_quick_add"  # ИЗМЕНИЛИ
         )
 
-        if st.sidebar.button("Добавить задачу", use_container_width=True) and task_name and selected_day:
+        if st.sidebar.button("Добавить задачу", use_container_width=True,
+                             key="add_task_quick_sidebar") and task_name and selected_day:  # ИЗМЕНИЛИ
             try:
                 day_data = diary_service.load_day(selected_day)
                 new_task = Task(
                     задача=task_name,
-                    время=task_time or "09:00–10:00",
+                    время=task_time or self._suggest_next_time([], period_select),
                     статус="☐",
                     прогресс=0,
-                    категория="🏠 Быт"
+                    категория=category_select
                 )
                 day_data.add_task(period_select, new_task)
                 diary_service.save_day(selected_day, day_data)
@@ -168,38 +173,88 @@ class DiaryTab:
             st.error(f"Ошибка загрузки дня: {e}")
 
     def _render_period_tasks(self, period: str, day_data: Day, selected_day: str, day_file: str) -> None:
-        """Рендеринг задач периода"""
+        """Рендеринг задач периода с сортировкой и перемещением"""
         tasks = day_data.get_tasks_by_period(period)
+
+        # Защита от None
+        if tasks is None:
+            tasks = []
+
         icon = PERIOD_ICONS.get(period, "📝")
 
         with st.expander(f"{icon} {period} ({len(tasks)} задач)", expanded=True):
-            for i, task in enumerate(tasks):
-                def create_delete_callback(idx, period_tasks):
+
+            # Сортировка задач по времени
+            sorted_tasks = self._sort_tasks_by_time(tasks)
+
+            for i, task in enumerate(sorted_tasks):
+                # Защита от None задачи
+                if task is None:
+                    continue
+
+                def create_delete_callback(task_idx, period_tasks):
                     def delete_task():
-                        period_tasks.pop(idx)
-                        diary_service.save_day(selected_day, day_data)
-                        st.rerun()
+                        if 0 <= task_idx < len(period_tasks):
+                            period_tasks.pop(task_idx)
+                            diary_service.save_day(selected_day, day_data)
+                            st.rerun()
 
                     return delete_task
+
+                def create_move_up_callback(task_idx, period_tasks):
+                    def move_up():
+                        if task_idx > 0 and task_idx < len(period_tasks):
+                            period_tasks[task_idx], period_tasks[task_idx - 1] = period_tasks[task_idx - 1], \
+                            period_tasks[task_idx]
+                            diary_service.save_day(selected_day, day_data)
+
+                    return move_up
+
+                def create_move_down_callback(task_idx, period_tasks):
+                    def move_down():
+                        if task_idx < len(period_tasks) - 1:
+                            period_tasks[task_idx], period_tasks[task_idx + 1] = period_tasks[task_idx + 1], \
+                            period_tasks[task_idx]
+                            diary_service.save_day(selected_day, day_data)
+
+                    return move_down
+
+                # Находим оригинальный индекс задачи после сортировки
+                try:
+                    original_index = tasks.index(task) if task in tasks else i
+                except ValueError:
+                    original_index = i
 
                 TaskComponents.render_task_editor(
                     task=task,
                     key_prefix=f"{selected_day}_{period}_{i}",
-                    on_delete=create_delete_callback(i, tasks),
-                    show_category=True
+                    on_delete=create_delete_callback(original_index, tasks),
+                    on_move_up=create_move_up_callback(original_index, tasks),
+                    on_move_down=create_move_down_callback(original_index, tasks),
+                    show_category=True,
+                    show_move_buttons=True
                 )
 
             # Кнопка добавления новой задачи
-            if st.button(f"➕ Добавить в {period}", key=f"add_{period}", use_container_width=True):
-                tasks.append(Task(
-                    задача="Новая задача",
-                    время="09:00–10:00",
-                    статус="☐",
-                    прогресс=0,
-                    категория="🏠 Быт"
-                ))
-                diary_service.save_day(selected_day, day_data)
-                st.rerun()
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button(f"➕ Добавить задачу в {period}", key=f"add_{period}", use_container_width=True):
+                    new_task = Task(
+                        задача="Новая задача",
+                        время=self._suggest_next_time(tasks, period),
+                        статус="☐",
+                        прогресс=0,
+                        категория="🏠 Быт"
+                    )
+                    tasks.append(new_task)
+                    diary_service.save_day(selected_day, day_data)
+                    st.rerun()
+
+            with col2:
+                if st.button(f"🕐 Сортировать по времени", key=f"sort_{period}", use_container_width=True):
+                    self._sort_tasks_in_period(tasks)
+                    diary_service.save_day(selected_day, day_data)
+                    st.rerun()
 
     def _render_day_analysis(self, day_data: Day) -> None:
         """Рендеринг анализа дня"""
@@ -332,6 +387,48 @@ class DiaryTab:
 
         except Exception as e:
             st.error(f"Неожиданная ошибка: {e}")
+
+    def _sort_tasks_by_time(self, tasks: List[Task]) -> List[Task]:
+        """Сортировка задач по времени"""
+        return sorted(tasks, key=lambda task: self._get_task_start_time(task))
+
+    def _get_task_start_time(self, task: Task) -> str:
+        """Получить время начала задачи для сортировки"""
+        start_time, _ = TimeComponents.parse_time_range(task.time)
+        return start_time or "23:59"  # Задачи без времени в конец
+
+    def _sort_tasks_in_period(self, tasks: List[Task]) -> None:
+        """Сортировка задач в периоде по времени"""
+        tasks.sort(key=lambda task: self._get_task_start_time(task))
+
+    def _suggest_next_time(self, tasks: List[Task], period: str) -> str:
+        """Предложить следующее время для новой задачи"""
+        if not tasks:
+            # Первая задача в периоде
+            if period == "Утро":
+                return "07:00-08:00"
+            elif period == "День":
+                return "12:00-13:00"
+            else:
+                return "18:00-19:00"
+
+        # Находим последнюю задачу по времени
+        sorted_tasks = self._sort_tasks_by_time(tasks)
+        last_task = sorted_tasks[-1]
+        last_start, last_end = TimeComponents.parse_time_range(last_task.time)
+
+        if last_end:
+            # Предлагаем время после последней задачи
+            try:
+                # Простая логика - добавляем 1 час
+                end_hour = int(last_end.split(':')[0])
+                next_hour = (end_hour + 1) % 24
+                return f"{last_end}-{next_hour:02d}:00"
+            except:
+                pass
+
+        # Fallback
+        return "09:00-10:00"
 
 
 # Глобальный экземпляр
