@@ -1,3 +1,5 @@
+import os
+import sys
 from pathlib import Path
 from typing import List, Dict, Any
 import yaml
@@ -7,7 +9,16 @@ class Config:
     """Конфигурация приложения"""
 
     def __init__(self):
-        self.config_path = Path("config/config.yaml")
+        # Определяем путь к конфигу относительно exe или скрипта
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys.executable).parent
+        else:
+            base_dir = Path(__file__).parent.parent
+
+        self.config_dir = base_dir / "config"
+        self.config_dir.mkdir(exist_ok=True)
+
+        self.config_path = self.config_dir / "config.yaml"
         self._data = self._load_config()
 
     def _load_config(self) -> Dict[str, Any]:

@@ -10,10 +10,19 @@ class StateService:
     """Сервис для управления категориями состояния"""
 
     def __init__(self):
-        self.config_dir = Path("config")
+        # Определяем путь к конфигурации относительно exe или скрипта
+        import sys
+        from pathlib import Path
+
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys.executable).parent
+        else:
+            base_dir = Path(__file__).parent.parent
+
+        self.config_dir = base_dir / "config"
         self.default_categories_file = self.config_dir / "state_categories.yaml"
         self.user_categories_file = self.config_dir / "user_state_categories.yaml"
-        self.additional_categories_file = self.config_dir / "additional_categories.yaml"  # НОВОЕ
+        self.additional_categories_file = self.config_dir / "additional_categories.yaml"
         self._ensure_config_dir()
 
     def _ensure_config_dir(self) -> None:
